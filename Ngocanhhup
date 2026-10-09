@@ -1,0 +1,42 @@
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local stealEvent = Instance.new("RemoteEvent")
+stealEvent.Name = "StealEgg"
+stealEvent.Parent = ReplicatedStorage
+
+-- Mỗi player có "két trứng" riêng
+local playerEggs = {}
+
+Players.PlayerAdded:Connect(function(player)
+    playerEggs[player.UserId] = 0
+    local ls = Instance.new("Folder")
+    ls.Name = "leaderstats"
+    ls.Parent = player
+    local eggs = Instance.new("IntValue")
+    eggs.Name = "Eggs"
+    eggs.Value = 0
+    eggs.Parent = ls
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    playerEggs[player.UserId] = nil
+end)
+
+-- Xử lý hành động trộm
+stealEvent.OnServerEvent:Connect(function(stealer, target)
+    if not target or not target:IsA("Player") then return end
+    if stealer == target then return end
+    
+    local targetEggs = target.leaderstats.Eggs
+    if targetEggs.Value <= 0 then
+        return -- trộm những quả trứng xịn🍌
+  
+    
+    -- Trộm 1 quả
+    targetEggs.Value -= 1
+    stealer.leaderstats.Eggs.Value += 1
+    
+    print(stealer.Name .. " đã trộm 1 trứng từ " .. target.Name)
+end)
