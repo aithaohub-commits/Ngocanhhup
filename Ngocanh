@@ -1,0 +1,99 @@
+-- EggServer.lua
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local DataStoreService = game:GetService("DataStoreService")
+
+-- DataStore để lưu trứng vào hộp save
+local eggStore = DataStoreService:GetDataStore("EggSave_v1")
+
+-- Remote Events
+local remoteFolder = ReplicatedStorage:WaitForChild("RemoteEvents")
+local stealEggEvent = remoteFolder:WaitForChild("StealEgg")
+local updateEggsEvent = remoteFolder:WaitForChild("UpdateEggs")
+local saveEggEvent = remoteFolder:WaitForChild("SaveEgg")
+
+-- Bảng lưu số trứng tạm thời (chưa save)
+local playerEggs = {}
+
+-- Hàm load dữ liệu khi người chơi vào
+local function loadEggs(player)
+    local userId = player.UserId
+    local success, data = pcall(function()
+        return eggStore:GetAsync("Player_" .. userId)
+    end)
+    
+    if success and data then
+        playerEggs[userId] = data
+    else
+        playerEggs[userId] = 0 -- Mặc định 0 trứng
+    end
+    
+    updateEggsEvent:FireClient(player, playerEggs[userId])
+end
+
+-- Hàm save dữ liệu
+local function saveEggs(player)
+    local userId = player.UserId
+    local eggs = playerEggs[userId] or 0
+    
+    local success, err = pcall(function()
+        eggStore:SetAsync("Player_" .. userId, eggs)
+    end)
+    
+    if success then
+        print("✅ Đã save " .. eggs .. " trứng cho " .. player.Name)
+    else
+        warn("❌ Lỗi save: " .. tostring(err))
+    end
+end
+
+-- Xử lý khi người chơi trộm trứng
+stealEggEvent.OnServerEvent:Connect(function(player)
+    local userId = player.UserId
+    -- Kiểm tra cooldown (chống spam)
+    if player:GetAttribute("Cooldown") then return end
+    player:SetAttribute("Cooldown", true)
+    
+    -- Cộng 1 trứng
+    playerEggs[userId] = (playerEggs[userId] or 0) + 1
+    updateEggsEvent:FireClient(player, playerEggs[userId])
+    
+    print(player.Name .. " đã trộm 1 trứng! Tổng: " .. playerEggs[userId])
+    
+    -- Cooldown 1 giây
+    task.wait(1)
+    player:SetAttribute("Cooldown", false)
+end)
+
+-- Xử lý khi người chơi lưu trứng vào hộp save
+saveEggEvent.OnServerEvent:Connect(function(player)
+    saveEggs(player)
+    updateEggsEvent:FireClient(player, playerEggs[player.UserId])
+end)
+
+-- Khi người chơi vào game
+Players.PlayerAdded:Connect(loadEggs)
+
+-- Khi người chơi rời game -> tự động save
+Players.PlayerRemoving:Connect(function(player)
+    saveEggs(player)
+    playerEggs[player.UserId] = nil
+end)
+
+-- Save tất cả định kỳ mỗi 60 giây
+task.spawn(function()
+    while true do
+        task.wait(60)
+        for _, player in ipairs(Players:GetPlayers()) do
+            saveEggs(player)
+        end
+    end
+end)
+
+-- Save khi server shutdown
+game:BindToClose(function()
+    for _, player in ipairs(Players:GetPlayers()) do
+        saveEggs(player)
+    end
+    task.wait(2)
+end)
