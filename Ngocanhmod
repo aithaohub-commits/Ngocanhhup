@@ -1,0 +1,100 @@
+-- StarterPlayer/StarterPlayerScripts/EggStealClient
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local events = ReplicatedStorage:WaitForChild("EggEvents")
+local stealEvent = events:WaitForChild("StealEgg")
+local claimEvent = events:WaitForChild("ClaimEgg")
+local updateEvent = events:WaitForChild("UpdateUI")
+
+-- Tạo GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "EggGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Hiển thị trứng đang giữ
+local holdingFrame = Instance.new("Frame")
+holdingFrame.Size = UDim2.new(0, 300, 0, 80)
+holdingFrame.Position = UDim2.new(0.5, -150, 1, -100)
+holdingFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+holdingFrame.BorderSizePixel = 0
+holdingFrame.Parent = screenGui
+
+local holdingLabel = Instance.new("TextLabel")
+holdingLabel.Size = UDim2.new(1, 0, 1, 0)
+holdingLabel.BackgroundTransparency = 1
+holdingLabel.Text = "Không có trứng"
+holdingLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+holdingLabel.TextScaled = true
+holdingLabel.Font = Enum.Font.GothamBold
+holdingLabel.Parent = holdingFrame
+
+-- Nút cất trứng
+local claimButton = Instance.new("TextButton")
+claimButton.Size = UDim2.new(0, 200, 0, 50)
+claimButton.Position = UDim2.new(0.5, -100, 1, -170)
+claimButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+claimButton.Text = "CẤT TRỨNG (E)"
+claimButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+claimButton.TextScaled = true
+claimButton.Font = Enum.Font.GothamBold
+claimButton.BorderSizePixel = 0
+claimButton.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = claimButton
+
+-- Cập nhật UI
+updateEvent.OnClientEvent:Connect(function(data)
+	if data.holding then
+		holdingLabel.Text = "Đang giữ: " .. data.holding.name .. " ($" .. data.holding.value .. ")"
+		holdingFrame.BackgroundColor3 = data.holding.color
+	else
+		holdingLabel.Text = "Không có trứng"
+		holdingFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	end
+end)
+
+-- Nút cất
+claimButton.MouseButton1Click:Connect(function()
+	claimEvent:FireServer()
+end)
+
+-- Phím E để cất
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.KeyCode == Enum.KeyCode.E then
+		claimEvent:FireServer()
+	end
+	if input.KeyCode == Enum.KeyCode.F then
+		-- Cướp trứng người gần nhất
+		local closest, minDist = nil, math.huge
+		local myChar = player.Character
+		if not myChar then return end
+		local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+		if not myRoot then return end
+		
+		for _, other in ipairs(Players:GetPlayers()) do
+			if other ~= player and other.Character then
+				local otherRoot = other.Character:FindFirstChild("HumanoidRootPart")
+				if otherRoot then
+					local d = (myRoot.Position - otherRoot.Position).Magnitude
+					if d < minDist then
+						minDist = d
+						closest = other
+					end
+				end
+			end
+		end
+		
+		if closest and minDist <= 10 then
+			stealEvent:FireServer(closest)
+		else
+			holdingLabel.Text = "Không có ai gần để cướp! (F)"
+		end
+	end
+end)
